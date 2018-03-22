@@ -19,6 +19,10 @@ import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.ScatteringByteChannel;
 
 /**
+ * <p>
+ *   每个NetworkReceive就是一个协议包，size是4个字节的包头，表示消息体长度N；buffer是消息体，长度等于N
+ * </p>
+ * 
  * A size delimited Receive that consists of a 4 byte network-ordered size N followed by N bytes of content
  */
 public class NetworkReceive implements Receive {

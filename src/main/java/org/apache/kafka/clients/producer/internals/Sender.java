@@ -196,6 +196,10 @@ public class Sender implements Runnable {
             // Mute all the partitions drained
             for (List<RecordBatch> batchList : batches.values()) {
                 for (RecordBatch batch : batchList)
+                    /*
+                     * 在保证顺序的情况下(MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION = 1)，一个partition在发送之后总会mute
+                     * 等待response
+                     * */
                     this.accumulator.mutePartition(batch.topicPartition);
             }
         }

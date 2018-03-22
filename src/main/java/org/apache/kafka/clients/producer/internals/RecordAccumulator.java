@@ -362,6 +362,11 @@ public final class RecordAccumulator {
     }
 
     /**
+     * <p>
+     *   按照partition所属的leader来重组batch，要求发送给每一个Leader的Request不超过MaxRequestSize。一个Leader如果有N partition，那么
+     *   一个request最多组装N个batch
+     * </p>
+     * 
      * Drain all the data for the given nodes and collate them into a list of batches that will fit within the specified
      * size on a per-node basis. This method attempts to avoid choosing the same topic-node over and over.
      * 
