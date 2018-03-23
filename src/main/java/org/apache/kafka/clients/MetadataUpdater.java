@@ -33,6 +33,10 @@ interface MetadataUpdater {
     List<Node> fetchNodes();
 
     /**
+     * <p>
+     *    如果元数据刷新时间到期或者元数据正在更新，返回true
+     * </p>
+     * 
      * Returns true if an update to the cluster metadata info is due.
      */
     boolean isUpdateDue(long now);

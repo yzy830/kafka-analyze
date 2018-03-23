@@ -16,6 +16,10 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
+ * <p>
+ *   管理每个连接的状态。使用NodeId来映射
+ * </p>
+ * 
  * The state of our connection to each node in the cluster.
  * 
  */
@@ -29,6 +33,10 @@ final class ClusterConnectionStates {
     }
 
     /**
+     * <p>
+     *   只有在DISCONNECTED状态下并且距离上次连接时间已经超过了重试回退时间，则可以创建连接
+     * </p>
+     * 
      * Return true iff we can currently initiate a new connection. This will be the case if we are not
      * connected and haven't been connected for at least the minimum reconnection backoff period.
      * @param id the connection id to check

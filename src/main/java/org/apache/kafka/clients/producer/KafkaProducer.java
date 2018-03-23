@@ -446,8 +446,14 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private Future<RecordMetadata> doSend(ProducerRecord<K, V> record, Callback callback) {
         TopicPartition tp = null;
         try {
+            /*
+             * 触发元数据更新。这里会确保拿到指定topic的元数据，如果在max.block.ms时间内没有得到，则会抛出TimeoutException
+             * */
             // first make sure the metadata for the topic is available
             ClusterAndWaitTime clusterAndWaitTime = waitOnMetadata(record.topic(), record.partition(), maxBlockTimeMs);
+            /*
+             * 减去元数据等待时间。保证在分配batch buffer的时候，不会超过max.block.ms
+             * */
             long remainingWaitMs = Math.max(0, maxBlockTimeMs - clusterAndWaitTime.waitedOnMetadataMs);
             Cluster cluster = clusterAndWaitTime.cluster;
             byte[] serializedKey;

@@ -56,6 +56,9 @@ public final class Metadata {
     private long lastRefreshMs;
     private long lastSuccessfulRefreshMs;
     private Cluster cluster;
+    /**
+     * 表示元数据已经失效，需要被淘汰。
+     */
     private boolean needUpdate;
     /* Topics with expiry time */
     private final Map<String, Long> topics;
@@ -116,6 +119,14 @@ public final class Metadata {
     }
 
     /**
+     * <p>
+     *   计算元数据更新时间，这个时间是下面两个最大值
+     *   <ol>
+     *    <li> 淘汰时间：如果needUpdate = true，立刻淘汰；如果needUpdate = false，等于lastSuccessfulRefreshMs + metadataExpireMs - nowMs
+     *    <li> 刷新回退时间：lastRefreshMs + refreshBackoffMs - nowMs
+     *   </ol>
+     * </p>
+     * 
      * The next time to update the cluster info is the maximum of the time the current info will expire and the time the
      * current info can be updated (i.e. backoff time has elapsed); If an update has been request then the expiry time
      * is now

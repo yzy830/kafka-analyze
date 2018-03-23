@@ -21,6 +21,11 @@ import java.util.List;
 import java.util.Map;
 
 /**
+ * <p>
+ *   维护每个Node的发送请求队列。对于一个Node，队首的{@link InFlightRequest}是尚未写到socket write buffer的请求，
+ *   这样的请求只会存在一个，因为只要存在一个{@link #canSendMore(String)}就会返回false
+ * </p>
+ * 
  * The set of requests which have been sent or are being sent but haven't yet received a response
  */
 final class InFlightRequests {
@@ -80,6 +85,14 @@ final class InFlightRequests {
     }
 
     /**
+     * <p>
+     *   满足下面两个条件之一，可以发送
+     *   <ol>
+     *     <li> 队列为空
+     *     <li> 队首请求已经发送完成(写入socket write buffer)，并且队列长度小于maxInFlightRequestsPerConnection
+     *   </ol>
+     * </p>
+     * 
      * Can we send more requests to this node?
      *
      * @param node Node in question

@@ -12,7 +12,13 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
+
 import org.apache.kafka.clients.producer.Callback;
+import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -21,11 +27,6 @@ import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.Record;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * A batch of records that is or will be sent.
@@ -87,6 +88,11 @@ public final class RecordBatch {
     }
 
     /**
+     * <p>
+     *  调用{@link KafkaProducer#send(org.apache.kafka.clients.producer.ProducerRecord, Callback)}注册的
+     *  回调，并通知get
+     * </p>
+     * 
      * Complete the request.
      * 
      * @param baseOffset The base offset of the messages assigned by the server
@@ -100,6 +106,10 @@ public final class RecordBatch {
         if (completed.getAndSet(true))
             throw new IllegalStateException("Batch has already been completed");
 
+        /*
+         * producerFuture是一个batch里所有Thunk(每个Thunk代表一个KafkaProducer发送的原始请求)共享的，他记录的baseOffset等信息，
+         * 在后面创建RecordMetadata时会使用
+         * */
         // Set the future before invoking the callbacks as we rely on its state for the `onCompletion` call
         produceFuture.set(baseOffset, logAppendTime, exception);
 
@@ -108,6 +118,10 @@ public final class RecordBatch {
             try {
                 if (exception == null) {
                     RecordMetadata metadata = thunk.future.value();
+                    /*
+                     * KafkaProducer只有一个IO线程。所有的读写IO、元数据更新、请求回调都在这里完成，因此
+                     * 上层实现的Callback必须简单，否则会影响IO发送
+                     * */
                     thunk.callback.onCompletion(metadata, null);
                 } else {
                     thunk.callback.onCompletion(null, exception);
@@ -117,6 +131,10 @@ public final class RecordBatch {
             }
         }
 
+        /*
+         * Thunk的future(KafkaProducer#send返回的Future)依靠prodcuerFuture完成阻塞。因此，这里直接完成producerFuture可以
+         * 通知所有发送的请求
+         * */
         produceFuture.done();
     }
 

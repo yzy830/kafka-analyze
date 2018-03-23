@@ -82,6 +82,9 @@ public class Selector implements Selectable {
 
     private final java.nio.channels.Selector nioSelector;
     private final Map<String, KafkaChannel> channels;
+    /**
+     * 保存发送完成的Send，这些Send已经发送到了SocketBuffer
+     */
     private final List<Send> completedSends;
     private final List<NetworkReceive> completedReceives;
     private final Map<KafkaChannel, Deque<NetworkReceive>> stagedReceives;

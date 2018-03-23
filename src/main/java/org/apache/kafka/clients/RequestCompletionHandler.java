@@ -12,7 +12,14 @@
  */
 package org.apache.kafka.clients;
 
+import org.apache.kafka.clients.producer.Callback;
+import org.apache.kafka.clients.producer.internals.Sender;
+
 /**
+ * <p>
+ *   底层的请求完成处理其，无论成功或者失败，都会调用这个。上层的{@link Callback}会被包装为一个{@code RequestCompletionHandler}，参考{@link Sender#sendProduceRequest}
+ * </p>
+ * 
  * A callback interface for attaching an action to be executed when a request is complete and the corresponding response
  * has been received. This handler will also be invoked if there is a disconnection while handling the request.
  */

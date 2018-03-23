@@ -12,11 +12,23 @@
  */
 package org.apache.kafka.clients;
 
+import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.AbstractRequest;
+import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.RequestHeader;
 
 /**
+ * <p>
+ *   统一封装客户端请求，其中{@link #requestBuilder}是策略模式，将具体请求的构建委托给具体上层业务。例如，在KafkaProducer中，客户请求使用
+ *   {@link ProduceRequest#Builder}
+ * </p>
+ * 
+ * <p>
+ *   {@code ClientRequest}保存了统一的元数据信息：destination(nodeId)、correlationId(请求需要)、clientId(客户端id)、
+ *   expectResponse(是否需要响应)、call(响应回调，会包装上层的{@link Callback})
+ * </p>
+ * 
  * A request being sent to the server. This holds both the network send as well as the client-level metadata.
  */
 public final class ClientRequest {

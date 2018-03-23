@@ -181,6 +181,9 @@ public class Sender implements Runnable {
         long notReadyTimeout = Long.MAX_VALUE;
         while (iter.hasNext()) {
             Node node = iter.next();
+            /*
+             * 这里检测Node连接是否准备好。如果没有准备好，会触发一次连接
+             * */
             if (!this.client.ready(node, now)) {
                 iter.remove();
                 notReadyTimeout = Math.min(notReadyTimeout, this.client.connectionDelay(node, now));
@@ -302,6 +305,9 @@ public class Sender implements Runnable {
                      batch.topicPartition,
                      this.retries - batch.attempts - 1,
                      error);
+            /*
+             * 将batch重新加入accumulator的队列，在队首，优先发送
+             * */
             this.accumulator.reenqueue(batch, now);
             this.sensors.recordRetries(batch.topicPartition.topic(), batch.recordCount);
         } else {
@@ -323,6 +329,14 @@ public class Sender implements Runnable {
             metadata.requestUpdate();
         }
 
+        /*
+         * 在保证发送顺序的情况下，每次取走一个batch，会mute这个partition。在响应的时候，会unmute
+         * 
+         * 如果失败了，会重新先加入accumulator队列的队首，然后再unmute。因此，可以保证顺序性
+         * 
+         * 对于canal的应用，可以让max.in.flight.requests.per.connection > 1，虽然会乱序，但是会保证将第一个失败的地方
+         * 报告给上层，此时rollback，把get会退到第一个失败的位置，然后继续发送。这种乱序，对FULL IMAGE的RBR不会有影响
+         * */
         // Unmute the completed partition.
         if (guaranteeMessageOrder)
             this.accumulator.unmutePartition(batch.topicPartition);
@@ -357,6 +371,9 @@ public class Sender implements Runnable {
 
         ProduceRequest.Builder requestBuilder =
                 new ProduceRequest.Builder(acks, timeout, produceRecordsByPartition);
+        /*
+         * 使用RequestCompletionHandler处理响应，在handleProduceResponse中处理上层的Callback
+         * */
         RequestCompletionHandler callback = new RequestCompletionHandler() {
             public void onComplete(ClientResponse response) {
                 handleProduceResponse(response, recordsByPartition, time.milliseconds());
