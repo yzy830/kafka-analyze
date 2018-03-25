@@ -138,6 +138,11 @@ public final class Metadata {
     }
 
     /**
+     * <p>
+     *   {@code requestUpdate}不会立刻出发获取元数据，只是标记元数据失效。元数据更新请求只会会在{@link NetworkClient#poll(long, long)}
+     *   中触发
+     * </p>
+     * 
      * Request an update of the current cluster metadata info, return the current version before the update
      */
     public synchronized int requestUpdate() {

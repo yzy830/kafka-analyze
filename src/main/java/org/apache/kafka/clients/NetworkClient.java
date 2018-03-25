@@ -626,6 +626,13 @@ public class NetworkClient implements KafkaClient {
              * source表示NodeId
              * */
             String source = receive.source();
+            /*
+             * 始终从最老的请求开始处理响应。因此broker必须保证发送的顺序性。正如NetworkClient可以使用InFlightRequest
+             * 队列保证发送顺序性一样，只要连接不断开，上层也可以。
+             * 
+             * 在连接断开的时候，NetworkClient使用请求超时和网络断开事件，将InFlightRequest队列直接清空，下一次在Sender#run中
+             * 会触发建立一个新的连接
+             * */
             InFlightRequest req = inFlightRequests.completeNext(source);
             AbstractResponse body = parseResponse(receive.payload(), req.header);
             log.trace("Completed receive from node {}, for key {}, received {}", req.destination, req.header.apiKey(), body);

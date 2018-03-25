@@ -44,9 +44,15 @@ public final class RecordBatch {
     private final List<Thunk> thunks = new ArrayList<>();
     private final MemoryRecordsBuilder recordsBuilder;
 
+    /**
+     * 发送次数
+     */
     volatile int attempts;
     int recordCount;
     int maxRecordSize;
+    /**
+     * BATCH从RecordAccumulator拉取的时间
+     */
     long drainedMs;
     long lastAttemptMs;
     long lastAppendTime;

@@ -164,6 +164,7 @@ public class Sender implements Runnable {
     void run(long now) {
         Cluster cluster = metadata.fetch();
         // get the list of partitions with data ready to send
+        // 获取需要发送信息的Node
         RecordAccumulator.ReadyCheckResult result = this.accumulator.ready(cluster, now);
 
         // if there are any partitions whose leaders are not known yet, force metadata update
@@ -182,7 +183,11 @@ public class Sender implements Runnable {
         while (iter.hasNext()) {
             Node node = iter.next();
             /*
-             * 这里检测Node连接是否准备好。如果没有准备好，会触发一次连接
+             * 这里检测Node连接是否准备好，并且可以发送数据。如果没有准备好，会触发一次连接
+             * 
+             * 这里可以发送数据，包括两层意思
+             * (1) 上一次交给NetworkClient的数据已经写入了Socket Write Buffer
+             * (2) InFlightRequest队列中等待响应的请求没有达到max.in.flight.requests.per.connection
              * */
             if (!this.client.ready(node, now)) {
                 iter.remove();
@@ -207,6 +212,7 @@ public class Sender implements Runnable {
             }
         }
 
+        // 提前expire在acculatore中就已经超过request.timeout.ms的batch
         List<RecordBatch> expiredBatches = this.accumulator.abortExpiredBatches(this.requestTimeout, now);
         // update sensors
         for (RecordBatch expiredBatch : expiredBatches)

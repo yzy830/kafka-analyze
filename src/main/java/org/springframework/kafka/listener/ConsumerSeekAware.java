@@ -32,6 +32,11 @@ import org.apache.kafka.common.TopicPartition;
 public interface ConsumerSeekAware {
 
 	/**
+	 * <p>
+	 *   在ListenerConsumer#run启动的时候，会调用这个方法，注册ConsumerSeekCallback。上层的MessageConsumer
+	 *   通过ConsumerSeekCallback可以设定position。
+	 * </p>
+	 * 
 	 * Register the callback to use when seeking at some arbitrary time. When used with a
 	 * {@code ConcurrentMessageListenerContainer} or the same listener instance in multiple
 	 * containers listeners should store the callback in a {@code ThreadLocal}.
@@ -40,6 +45,10 @@ public interface ConsumerSeekAware {
 	void registerSeekCallback(ConsumerSeekCallback callback);
 
 	/**
+	 * <p>
+	 *   在rebalance的时候调用，获得每个Partition下一条记录的offset
+	 * </p>
+	 * 
 	 * When using group management, called when partition assignments change.
 	 * @param assignments the new assignments and their current offsets.
 	 * @param callback the callback to perform an initial seek after assignment.
@@ -47,6 +56,10 @@ public interface ConsumerSeekAware {
 	void onPartitionsAssigned(Map<TopicPartition, Long> assignments, ConsumerSeekCallback callback);
 
 	/**
+	 * <p>
+	 *   在idle的时候调用，获得每个Partition下一条记录的offset
+	 * </p>
+	 * 
 	 * If the container is configured to emit idle container events, this method is called
 	 * when the container idle event is emitted - allowing a seek operation.
 	 * @param assignments the new assignments and their current offsets.

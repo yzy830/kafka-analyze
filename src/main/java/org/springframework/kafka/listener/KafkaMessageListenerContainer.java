@@ -266,9 +266,15 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 
 		private final boolean isBatchAck = this.containerProperties.getAckMode().equals(AckMode.BATCH);
 
+		/*
+		 * 待处理的ConsumerRecords队列
+		 * */
 		private final BlockingQueue<ConsumerRecords<K, V>> recordsToProcess =
 				new LinkedBlockingQueue<>(this.containerProperties.getQueueDepth());
 
+		/*
+		 * 记录待ACK的records
+		 * */
 		private final BlockingQueue<ConsumerRecord<K, V>> acks = new LinkedBlockingQueue<>();
 
 		private final BlockingQueue<TopicPartitionInitialOffset> seeks = new LinkedBlockingQueue<>();
@@ -277,6 +283,9 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 
 		private final BatchErrorHandler batchErrorHandler;
 
+		/**
+		 * 使用assign订阅topic的时候，记录用户指定的topic
+		 */
 		private volatile Map<TopicPartition, OffsetMetadata> definedPartitions;
 
 		private ConsumerRecords<K, V> unsent;
@@ -387,7 +396,9 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 									"and will stop the invoker.");
 						}
 						if (ListenerConsumer.this.listenerInvokerFuture != null) {
+							// 停止消费线程，并commit
 							stopInvokerAndCommitManualAcks();
+							// 清空消费队列
 							ListenerConsumer.this.recordsToProcess.clear();
 							ListenerConsumer.this.unsent = null;
 						}
@@ -405,6 +416,7 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 									"so transition will be handled by the consumer");
 						}
 					}
+					// 调用上层的partition revoked
 					getContainerProperties().getConsumerRebalanceListener().onPartitionsRevoked(partitions);
 				}
 
@@ -441,6 +453,7 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 					// listen to
 					if (!ListenerConsumer.this.autoCommit && KafkaMessageListenerContainer.this.isRunning()
 							&& !CollectionUtils.isEmpty(partitions)) {
+						// 启动消费线程
 						startInvoker();
 					}
 					getContainerProperties().getConsumerRebalanceListener().onPartitionsAssigned(partitions);
@@ -525,6 +538,10 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 					if (!this.autoCommit) {
 						processCommits();
 					}
+					/*
+					 * 处理通过ConsumerSeekCallback#seek接口注册的offset偏移，使用KafkaConsumer#seek
+					 * 设定偏移量
+					 * */
 					processSeeks();
 					if (this.logger.isTraceEnabled()) {
 						this.logger.trace("Polling (paused=" + this.paused + ")...");
@@ -545,6 +562,9 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 						}
 						else {
 							if (sendToListener(records)) {
+								/*
+								 * 进入这个分支，表示消息消费过慢。此时会pause所有的partition
+								 * */
 								if (this.assignedPartitions != null) {
 									// avoid group management rebalance due to a slow
 									// consumer
@@ -560,6 +580,7 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 							long now = System.currentTimeMillis();
 							if (now > lastReceive + this.containerProperties.getIdleEventInterval()
 									&& now > lastAlertAt + this.containerProperties.getIdleEventInterval()) {
+								// 发布ListenerContainerIdleEvent事件
 								publishIdleContainerEvent(now - lastReceive);
 								lastAlertAt = now;
 								if (this.theListener instanceof ConsumerSeekAware) {
@@ -568,6 +589,10 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 							}
 						}
 					}
+					/*
+					 * 检查recordsToProcess是否有空闲空间，如果有则将unsent发送出去，恢复partition拉取。
+					 * 使用这种方法，可以避免因为业务线程处理事件过程，导致连接断开，误触发rebalance
+					 * */
 					this.unsent = checkPause(this.unsent);
 				}
 				catch (WakeupException e) {

@@ -222,6 +222,26 @@ public final class RecordAccumulator {
     }
 
     /**
+     * <p>
+     *   丢弃Accumulator中超时的RecordBatch，除非这个Partition被mute了。一个Partition被Mute时，说明这个Partition要求严格的发送顺序
+     *   即(max.in.flight.requests.per.connection = 1)，并且在发送中
+     * </p>
+     * 
+     * <p>
+     *   因此，只有在max.in.flight.requests.per.connection = 1时，才能保证一个Partition的发送请求是严格按顺序成功或者失败
+     * </p>
+     * 
+     * <p>
+     *   当max.in.flight.requests.per.connection > 1且retries = 0，只能保证消息成功的顺序满足发送顺序。例如发送消息1、2、3、4、5，
+     *   其中2/4/5成功了，那么server收到2、4、5的顺序必然与发送顺序相同；但是1、3收到失败回调的顺序不能保证；因此，对于canal的发送场景，上层还是需要
+     *   使用PriorityQueue来保障ack或者rollback的顺序
+     * </p>
+     * 
+     * <p>
+     *   如果max.in.flight.requests.per.connection > 1且retries > 0，不能发证发送成功或者失败的顺序。例如发送消息1、2、3、4、5，
+     *   server收到的消息顺序可能是2、3、1、5、4
+     * </p>
+     * 
      * Abort the batches that have been sitting in RecordAccumulator for more than the configured requestTimeout
      * due to metadata being unavailable
      */
@@ -285,6 +305,10 @@ public final class RecordAccumulator {
     }
 
     /**
+     * <p>
+     *   {@code ready}会返回一组满足发送条件的Node、下一次check的时间、丢失leader信息的partition
+     * </p>
+     * 
      * Get a list of nodes whose partitions are ready to be sent, and the earliest time at which any non-sendable
      * partition will be ready; Also return the flag for whether there are any unknown leaders for the accumulated
      * partition batches.
@@ -324,16 +348,32 @@ public final class RecordAccumulator {
                 } else if (!readyNodes.contains(leader) && !muted.contains(part)) {
                     RecordBatch batch = deque.peekFirst();
                     if (batch != null) {
+                    	// 失败重试，并且没有超过重试间隔
                         boolean backingOff = batch.attempts > 0 && batch.lastAttemptMs + retryBackoffMs > nowMs;
                         long waitedTimeMs = nowMs - batch.lastAttemptMs;
                         long timeToWaitMs = backingOff ? retryBackoffMs : lingerMs;
                         long timeLeftMs = Math.max(timeToWaitMs - waitedTimeMs, 0);
+                        // 第一个batch已经满了
                         boolean full = deque.size() > 1 || batch.isFull();
+                        // 超过了等待时间
                         boolean expired = waitedTimeMs >= timeToWaitMs;
+                        /*
+                         * 如果
+                         * (1) 第一个batch满了
+                         * (2) 或者，超过了等待时间
+                         * (3) 或者，内存耗尽
+                         * (4) 或者，正在flush
+                         * (5) 或者，Accumulator已经关闭
+                         * 并且，如果是失败重试，没有超过失败重试时间
+                         * 则发送
+                         * */
                         boolean sendable = full || expired || exhausted || closed || flushInProgress();
                         if (sendable && !backingOff) {
                             readyNodes.add(leader);
                         } else {
+                        	/*
+                        	 * nextReadyCheckDelayMs是所有partition中，最快满足发送条件partiton的时间
+                        	 * */
                             // Note that this results in a conservative estimate since an un-sendable partition may have
                             // a leader that will later be found to have sendable data. However, this is good enough
                             // since we'll just wake up and then sleep again for the remaining time.
@@ -384,6 +424,10 @@ public final class RecordAccumulator {
             return Collections.emptyMap();
 
         Map<Integer, List<RecordBatch>> batches = new HashMap<>();
+        /*
+         * 每个Node对多从每个所属的PARTITION的RecordBatch队列获得一个batch，并且不能保证max.request.size
+         * (除非单个batch就超过了max.request.size，保证异常大的消息能够发送)
+         * */
         for (Node node : nodes) {
             int size = 0;
             List<PartitionInfo> parts = cluster.partitionsForNode(node.id());
@@ -400,6 +444,7 @@ public final class RecordAccumulator {
                         synchronized (deque) {
                             RecordBatch first = deque.peekFirst();
                             if (first != null) {
+                            	// 重试，但是还没有到期
                                 boolean backoff = first.attempts > 0 && first.lastAttemptMs + retryBackoffMs > now;
                                 // Only drain the batch if it is not during backoff period.
                                 if (!backoff) {
